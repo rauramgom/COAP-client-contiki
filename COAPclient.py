@@ -1,14 +1,11 @@
+#!/usr/bin/python
 from coapthon.client.helperclient import HelperClient
 import random
 import re
 import time
 
-def countdown(n):
-	while n>0:
-		time.sleep(1)
-		n=n-1
-	main()
-
+TRUE = 1
+FALSE = 0
 
 def random_server():
 	server=["aaaa::212:4b00:7e1:c280", "aaaa::212:4b00:7e1:d086"]
@@ -37,26 +34,26 @@ def create_pkt():
 
 def write_file(response):
 	flag=TRUE
-	parserFullLine = re.compile("From \('(.*)', (\d+)\).* ({.*:)")
-	FullLine=parserFullLine.findall(response)
-	if len(FullLine):
-		if len(FullLine[0])==3:
+	parserFullLine = re.compile("From \('(.*)', (\d+)\).* ({.*):?\.\.\.")
+	fullLine=parserFullLine.findall(str(response))
+
+	if len(fullLine):
+		if len(fullLine[0])==3:
 			parserType = re.compile("{\"(.*)\":{")
-			Type=parserType.findall(response)
-		
-			if (len(Type) and Type[0]=="Volt"):
-				unit="\"mV\""
-			elif (len(Type) and Type[0]=="Temp"):
+			fieldType=parserType.findall(str(response))
+			if (len(fieldType) and fieldType[0]=="Volt"):
+				unit=":\"mV\""
+			elif (len(fieldType) and fieldType[0]=="Temp"):
 				unit="\"C\""
 			else:
-				flag=ERROR
+				flag=FALSE
 				print "[**ERROR**] There is an error while getting Type value.\n"
 
-			if flag==ERROR:
+			if flag==FALSE:
 				newLine = "[**ERROR**] Error parsing this line!"
 			else:
-				measure = (FullLine[0][2], "}}")
-				newLine = "From: ({0}:{1}), Receive: {2}, Date: {3}\n".format(FullLine[0][0], FullLine[0][1], unit.join(measure), time.ctime())
+				measure = (fullLine[0][2], "}}")
+				newLine = "From: ({0}:{1}), Receive: {2}, Date: {3}\n".format(fullLine[0][0], fullLine[0][1], unit.join(measure), time.ctime())
 			
 			with open('file.txt', 'a') as f:
 				f.write(newLine)
@@ -67,17 +64,18 @@ def write_file(response):
 # End of write_file()
 
 def main():
-	host, port, path = create_pkt()
-	print "[{0}] Making GET request: [{1}]:{2}{3}".format(time.ctime(), host,port,path)
-	serverRequest = HelperClient(server=(host, port))
-	if serverRequest:
-		response = serverRequest.get(path)
-		if response:
-			serverRequest.stop()
-			write_file(response)
-	else:
-		print "[**ERROR**] No response has been received from the server.\n"
-	countdown(5)
+	while(1):
+		host, port, path = create_pkt()
+		print "[{0}] Making GET request: [{1}]:{2}{3}".format(time.ctime(), host,port,path)
+		serverRequest = HelperClient(server=(host, port))
+		if serverRequest:
+			response = serverRequest.get(path)
+			if response:
+				serverRequest.stop()
+				write_file(response)
+		else:
+			print "[**ERROR**] No response has been received from the server.\n"
+		time.sleep(5)
 # End of main()
 
 if __name__ == '__main__':
