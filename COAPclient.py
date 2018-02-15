@@ -3,8 +3,10 @@ from coapthon.client.helperclient import HelperClient
 import random
 import re
 import time
+import signal
 
 serverRequest = None
+countObserver = 0
 
 def write_file(response):
 	flag=True
@@ -20,7 +22,7 @@ def write_file(response):
 				unit="\"C\""
 			else:
 				flag=False
-				print "[**ERROR**] There is an error while getting Type value.\n"
+				print "[**ERROR**] There is an error while getting Type value."
 
 			if flag==False:
 				newLine = "[**ERROR**] Error parsing this line!"
@@ -31,17 +33,18 @@ def write_file(response):
 			with open('results.txt', 'a') as f:
 				f.write(newLine)
 		else:
-			print "[**ERROR**] There is an error while parsing full line.\n"
+			print "[**ERROR**] There is an error while parsing full line."
 	else:
-		print "[**ERROR**] The parsed full line is empty!\n"
+		print "[**ERROR**] The parsed full line is empty!"
 # End of write_file()
 
 
 def create_pkt():
-	host = random.choice(["aaaa::212:4b00:7e1:c280", "aaaa::212:4b00:7e1:d086"])
+	#host = random.choice(["aaaa::212:4b00:7e1:c280", "aaaa::212:4b00:7e1:d086"])
+	host = "aaaa::212:4b00:7e1:c280"
 	udp_port = 5683
-	payload = random.choice(["/sen/temp","/sen/volt"])
-
+	payload = "/sen/temp"
+	#payload = random.choice(["/sen/temp","/sen/volt"])
 	return host, udp_port, payload
 # End of create_pkt()
 
@@ -58,28 +61,55 @@ def observer_func():
 
 def client_callback_observe(response):
 	global serverRequest
-	print response
-	write_file(response)
+	global countObserver
 	check=True
-	while check:
+	option=""
+	
+	print response
+	print "Writing new observed measure..."
+	write_file(response)
+	countObserver += 1
+
+	if countObserver==4:
+		while check:
+			option = raw_input("Stop observing? [y/N]: ")
+			if (option.lower() == "y" or option.lower() == "n"):
+				break
+			else:
+				print "Unrecognized choose."
+
+		if option.lower() == "y":
+			# RFC7641 explicit cancel is by sending OBSERVE=1 with the same token,
+			# not by an unsolicited RST (which may would be ignored)
+			print "Sending request with OBSERVE=1 to cancel an observation...\n"
+			serverRequest.cancel_observing(response, True)
+			time.sleep(2.0)
+			main()
+
+		elif option.lower() == "n":
+			countObserver=0
+
+
+	"""try:
+		print "Writing new observed measure..."
+		write_file(response)
+		time.sleep(5)
+	except KeyboardInterrupt:
 		option = raw_input("Stop observing? [y/N]: ")
 		if option != "" and not (option.lower() == "y" or option.lower() == "n"):
 			print "Unrecognized choose."
-			continue
 		elif option.lower() == "y":
-			while True:
-				rst = raw_input("Send RST message? [y/N]: ")
-				if rst != "" and not (rst.lower() == "n" or rst.lower() == "y"):
-					print "Unrecognized choose."
-					continue
-				elif rst == "" or rst.lower() == "y":
-					serverRequest.cancel_observing(response, True)
-				else:
-					serverRequest.cancel_observing(response, False)
-				check = False
-				break
+			print "Sending request with OBSERVE=1 to cancel an observation...\n"
+			# RFC7641 explicit cancel is by sending OBSERVE=1 with the same token,
+			# not by an unsolicited RST (which may would be ignored)
+			serverRequest.cancel_observing(response, True)
+			time.sleep(2.0)
+			main()
 		else:
-			continue
+			print "The observer has not been cancelled.\n"
+			time.sleep(2.0)
+			main()
+	print "[**BORRAR**] Al final de client_callback_observe()"""
 # End of client_callback_observe()
 
 
@@ -107,16 +137,18 @@ def main():
 		if timer_req=="0":
 			simple_request()
 		elif timer_req>"0":
-			while (1):
-				simple_request()
-				time.sleep(float(timer_req))
+			try:
+				while (1):
+					simple_request()
+					time.sleep(float(timer_req))
+			except KeyboardInterrupt:
+				print "\nStopping requests...\n"
+				main()
 		else:
 			print "Unrecognized choose."
 
 	elif type_of_request.upper()=="O":
 		observer_func()
-
-
 # End of main()
 
 if __name__ == '__main__':
