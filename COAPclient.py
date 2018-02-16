@@ -40,11 +40,9 @@ def write_file(response):
 
 
 def create_pkt():
-	#host = random.choice(["aaaa::212:4b00:7e1:c280", "aaaa::212:4b00:7e1:d086"])
-	host = "aaaa::212:4b00:7e1:c280"
+	host = random.choice(["aaaa::212:4b00:7e1:c280", "aaaa::212:4b00:7e1:d086"])
 	udp_port = 5683
-	payload = "/sen/temp"
-	#payload = random.choice(["/sen/temp","/sen/volt"])
+	payload = random.choice(["/sen/temp","/sen/volt"])
 	return host, udp_port, payload
 # End of create_pkt()
 
@@ -62,16 +60,14 @@ def observer_func():
 def client_callback_observe(response):
 	global serverRequest
 	global countObserver
-	check=True
 	option=""
 	
-	print response
+	#print response
 	print "Writing new observed measure..."
 	write_file(response)
 	countObserver += 1
-
-	if countObserver==4:
-		while check:
+	if countObserver==1:
+		while (1):
 			option = raw_input("Stop observing? [y/N]: ")
 			if (option.lower() == "y" or option.lower() == "n"):
 				break
@@ -81,35 +77,13 @@ def client_callback_observe(response):
 		if option.lower() == "y":
 			# RFC7641 explicit cancel is by sending OBSERVE=1 with the same token,
 			# not by an unsolicited RST (which may would be ignored)
-			print "Sending request with OBSERVE=1 to cancel an observation...\n"
+			print "Sending request with OBSERVE=1 to cancel the observation...\n"
 			serverRequest.cancel_observing(response, True)
 			time.sleep(2.0)
 			main()
 
 		elif option.lower() == "n":
 			countObserver=0
-
-
-	"""try:
-		print "Writing new observed measure..."
-		write_file(response)
-		time.sleep(5)
-	except KeyboardInterrupt:
-		option = raw_input("Stop observing? [y/N]: ")
-		if option != "" and not (option.lower() == "y" or option.lower() == "n"):
-			print "Unrecognized choose."
-		elif option.lower() == "y":
-			print "Sending request with OBSERVE=1 to cancel an observation...\n"
-			# RFC7641 explicit cancel is by sending OBSERVE=1 with the same token,
-			# not by an unsolicited RST (which may would be ignored)
-			serverRequest.cancel_observing(response, True)
-			time.sleep(2.0)
-			main()
-		else:
-			print "The observer has not been cancelled.\n"
-			time.sleep(2.0)
-			main()
-	print "[**BORRAR**] Al final de client_callback_observe()"""
 # End of client_callback_observe()
 
 
