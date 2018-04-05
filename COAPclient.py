@@ -5,90 +5,72 @@ import re
 import time
 import signal
 
+from observer import *
+
 serverRequest = None
-countObserver = 0
 
 def write_file(response):
-	flag=True
+	flag = True
 	parserFullLine = re.compile("From \('(.*)', (\d+)\).* ({.*):?\.\.\.")
-	fullLine=parserFullLine.findall(str(response))
-	if len(fullLine):
+	fullLine = parserFullLine.findall(str(response))
+	if len(fullLine)>0:
 		if len(fullLine[0])==3:
 			parserType = re.compile("{\"(.*)\":{")
-			fieldType=parserType.findall(str(response))
+			fieldType = parserType.findall(str(response))
 			if (len(fieldType) and fieldType[0]=="Volt"):
-				unit=":\"mV\""
-			elif (len(fieldType) and fieldType[0]=="Temp"):
-				unit="\"C\""
-			else:
-				flag=False
-				print "[**ERROR**] There is an error while getting Type value."
-
-			if flag==False:
-				newLine = "[**ERROR**] Error parsing this line!"
-			else:
+				unit = ":\"mV\""
 				measure = (fullLine[0][2], "}}")
 				newLine = "From: ({0}:{1}), Receive: {2}, Date: {3}\n".format(fullLine[0][0], fullLine[0][1], unit.join(measure), time.ctime())
+			elif (len(fieldType) and fieldType[0]=="Temp"):
+				unit = "\"C\""
+				measure = (fullLine[0][2], "}}")
+				newLine = "From: ({0}:{1}), Receive: {2}, Date: {3}\n".format(fullLine[0][0], fullLine[0][1], unit.join(measure), time.ctime())
+			else:
+				flag = False
+				print "[**ERROR**] There is an error while getting Type value."
 			
-			with open('results.txt', 'a') as f:
+			with open('/tmp/results_demo.txt', 'a') as f:
 				f.write(newLine)
 		else:
 			print "[**ERROR**] There is an error while parsing full line."
+			flag = False
 	else:
 		print "[**ERROR**] The parsed full line is empty!"
+		flag = False
+
+	return flag
 # End of write_file()
 
 
-def create_pkt():
-	host = random.choice(["aaaa::212:4b00:7e1:c280", "aaaa::212:4b00:7e1:d086"])
+def create_pkt(type_of_var, type_of_sensor):
+	resources = ["sen/local temp", "sen/local volt", "sen/remote temp", "sen/remote volt"]
+	if type_of_var.lower() == "l":
+		if type_of_sensor.lower() == "t":
+			payload = resources[0]
+		else:
+			payload = resources[1]
+	else:
+		if type_of_sensor.lower() == "t":
+			payload = resources[2]
+		else:
+			payload = resources[3]
+
+	#host = random.choice(["aaaa::212:4b00:7e1:c280", "aaaa::212:4b00:7e1:d086"])
+	#host = "aaaa::212:4b00:7e1:d086"
 	udp_port = 5683
-	payload = random.choice(["/sen/temp","/sen/volt"])
-	return host, udp_port, payload
+
+	#return host, udp_port, payload
+	return udp_port, payload
 # End of create_pkt()
 
 
-def observer_func():
-	global serverRequest
-	host, port, path = create_pkt()
-	print "[{0}] Making an observer request: [{1}]:{2}{3}".format(time.ctime(), host,port,path)
-	serverRequest = HelperClient(server=(host, port))
-	if serverRequest:
-		serverRequest.observe(path, client_callback_observe)
-# End of observer_func()
 
 
-def client_callback_observe(response):
-	global serverRequest
-	global countObserver
-	option=""
-	
-	#print response
-	print "Writing new observed measure..."
-	write_file(response)
-	countObserver += 1
-	if countObserver==1:
-		while (1):
-			option = raw_input("Stop observing? [y/N]: ")
-			if (option.lower() == "y" or option.lower() == "n"):
-				break
-			else:
-				print "Unrecognized choose."
+def simple_request(type_of_var, type_of_sensor):
 
-		if option.lower() == "y":
-			# RFC7641 explicit cancel is by sending OBSERVE=1 with the same token,
-			# not by an unsolicited RST (which may would be ignored)
-			print "Sending request with OBSERVE=1 to cancel the observation...\n"
-			serverRequest.cancel_observing(response, True)
-			time.sleep(2.0)
-			main()
+	port, path = create_pkt(type_of_var, type_of_sensor)
+	host = "aaaa::212:4b00:7bb:1384"
 
-		elif option.lower() == "n":
-			countObserver=0
-# End of client_callback_observe()
-
-
-def simple_request():
-	host, port, path = create_pkt()
 	print "[{0}] Making GET request: [{1}]:{2}{3}".format(time.ctime(), host,port,path)
 	serverRequest = HelperClient(server=(host, port))
 	if serverRequest:
@@ -107,13 +89,26 @@ def main():
 	if type_of_request == "" or not (type_of_request.upper()=="R" or type_of_request.upper()=="O"):
 		print "Unrecognized choose."
 	elif type_of_request.upper()=="R":
-		timer_req = raw_input("   Choose a timer to make periodical requests (0 for only one): ")
+		timer_req = raw_input("Choose a timer to make periodical requests (0 for only one): ")
+		while (1):
+			type_of_var = raw_input("Local or Remote resource? [L/R]:")
+			if (type_of_var.lower() == "l" or type_of_var.lower() == "r"):
+				while (1):
+					type_of_sensor = raw_input("Temp or Volt? [T/V]: ")
+					if (type_of_sensor.lower() == "t" or type_of_sensor.lower() == "v"):
+						break
+					else:
+						print "Unrecognized choose."
+				break
+		else:
+			print "Unrecognized choose."
+
 		if timer_req=="0":
-			simple_request()
+			simple_request(type_of_var, type_of_sensor)
 		elif timer_req>"0":
 			try:
 				while (1):
-					simple_request()
+					simple_request(type_of_var, type_of_sensor)
 					time.sleep(float(timer_req))
 			except KeyboardInterrupt:
 				print "\nStopping requests...\n"
